@@ -37,6 +37,10 @@ export async function main(ns) {
     const queue = ['home'];
 
     // Start exploring servers using breadth-first search
+    //https://www.reddit.com/r/Bitburner/comments/rhpp8p/scan_script_updated_for_bitburner_v110/
+    //While loop below to find all servers is adjusted but originally found in the above script curteosy of Tempest_42
+
+
     while (queue.length > 0) {
         // Get the next server to visit from the queue
         const serverName = queue.shift();
