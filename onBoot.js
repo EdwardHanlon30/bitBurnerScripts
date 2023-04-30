@@ -21,6 +21,8 @@ export async function main(ns) {
         "."
     ];
 
+    let hackLevels = [];
+
     // Define the filename for the hacking script
     const justHack = "justHack.js";
 
@@ -71,7 +73,8 @@ export async function main(ns) {
             hackThenExclude,
             skippedServers,
             excludedServers,
-            noRamAvailable
+            noRamAvailable,
+            hackLevels
         );
     }
 
@@ -80,7 +83,7 @@ export async function main(ns) {
 
     // Check if there are servers with no available RAM
     if (amountOfServers > 0) {
-        // Commented out code for killing running scripts on servers with no RAM
+        // Commented out code for killing running scripts on home targeting servers with no RAM
         /*for (let running in noRamAvailable) {
             if (ns.isRunning(justHack, "home", noRamAvailable[running])) {
                 ns.kill(justHack, "home", noRamAvailable[running]);
@@ -109,12 +112,23 @@ export async function main(ns) {
 
         // Run the script on each server with no available RAM
         for (let homeTarget in noRamAvailable) {
-            // Run the script and get the process ID (PID)
-            let pid = ns.run(justHack, newThreads, noRamAvailable[homeTarget]);
-            if (pid > 0) {
-                ns.tprint(`Script successfully ran with PID[${pid}] and target was ${noRamAvailable[homeTarget]}`);
-            } else {
-                ns.tprint(`Something went wrong on home server targeting ${noRamAvailable[homeTarget]}`);
+            if(!ns.isRunning(justHack, "home", noRamAvailable[homeTarget]))
+            {
+                // Run the script and get the process ID (PID)
+                let pid = ns.run(justHack, newThreads, noRamAvailable[homeTarget]);
+                if (pid > 0) 
+                {
+                    ns.tprint(`Script successfully ran with PID[${pid}] and target was ${noRamAvailable[homeTarget]}`);
+                } 
+                else 
+                {
+                    ns.tprint(`Something went wrong on home server targeting ${noRamAvailable[homeTarget]}\n
+                               If an aditional server was added to noRamAvailable array then kill the scripts on home and run this one again`);
+                }
+            }
+            else
+            {
+                ns.tprint(`The justHack script is already running on ${noRamAvailable[homeTarget]}`);
             }
         }
     }
@@ -130,17 +144,41 @@ export async function main(ns) {
         skippedOutput += " ";
     }
 
-    // Print the skipped servers and the total number of servers found
-    ns.tprint(`${skippedOutput} \nTotal Servers Found = ${serverFoundCount}`);
+
+        // Initialize skippedOutput variable to store skipped server information
+        let exc = "exc Servers ::: ";
+
+        // Loop through the skippedServers array and concatenate server information to skippedOutput
+        for (let value in excludedServers) {
+            // Append server name and value to skippedOutput
+            exc += `${value}-`;
+            exc += excludedServers[value];
+            exc+= " ";
+        }
+
+    // Print the skipped servers and the total number of servers found - 1 as array starts at 0
+    ns.tprint(`${skippedOutput} \n\nTotal Servers Found = ${serverFoundCount-1}\n\nRemaining Servers Hack order`);
+
+    ns.tprint(`##############################\n\n ${exc}`);
+
+    const ordered = hackLevels.sort( (currentServer, nextServer) => ns.getServerRequiredHackingLevel(currentServer) > ns.getServerRequiredHackingLevel(nextServer) ? 1 : -1);
+
+
+    ordered.forEach(server => {
+        ns.tprint(`${server}  ${ns.getServerRequiredHackingLevel(server)-playerHackLevel}`);
+    })
 }//##END MAIN ##//
+
+
 
 // Function to exclude a server from further processing
 async function exclude(ns, serv, hackThenExclude, excludedServers, skippedServers) {
     // Get the list of purchased servers
     let myServers = ns.getPurchasedServers();
+    myServers.push("home");
 
     // Check if the server is already in the player's purchased servers or if it is the home server
-    if (myServers.includes(serv) || ns.getHostname(serv) === "home") {
+    if (myServers.includes(serv)) {
         // Server is already owned or it is the home server, so skip it
         skippedServers.push(serv);
         return;
@@ -239,18 +277,19 @@ async function portChecker(ns, serv) {
 }
 
 // Function to hack a server
-const hackServer = async (ns, serv, playerHackLevel, justHack, portList, portCount, hackThenExclude, skippedServers, excludedServers, noRamAvailable) => {
+const hackServer = async (ns, serv, playerHackLevel, justHack, portList, portCount, hackThenExclude, skippedServers, excludedServers, noRamAvailable, hackLevels) => {
 
     // Exclude the server based on certain conditions
     exclude(ns, serv, hackThenExclude, excludedServers, skippedServers);
 
     // Initialize the process ID and thread count
-    const pid = 0;
+    let pid = 0;
     let myThreads = 0;
 
     // Check if the server is excluded from hacking
-    if (excludedServers.includes(serv)) {
-        ns.tprint(`Skipping server ${serv} as it is excluded 197`);
+    if (excludedServers.includes(serv) && ns.getHostname(serv) !== 'home' && ns.getHostname(serv) !== 'darkweb') {
+        ns.tprint(`Skipping server ${serv} as it is excluded `);
+        skippedServers.push(serv);
         return;
     }
 
@@ -336,12 +375,14 @@ const hackServer = async (ns, serv, playerHackLevel, justHack, portList, portCou
             ns.tprint(`JustHack.js already running on ${serv}`);
             return;
         }
-    } else {
+    } 
+    else {
         // Insufficient hacking level, skip the server
         if (!skippedServers.includes(serv)) {
             skippedServers.push(serv);
         }
         ns.tprint(`Skipping server ${serv} due to insufficient hacking level\n${(ns.getServerRequiredHackingLevel(serv)-playerHackLevel)} more Player Levels required`);
+        hackLevels.push(serv);
         return;
     }
 }
